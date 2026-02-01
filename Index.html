@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Valentine?</title>
+  <style>
+    * { box-sizing: border-box; }
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:#fff;
+      background: radial-gradient(1200px 800px at 50% 30%, #2a1b2a 0%, #0f1020 55%, #070812 100%);
+      overflow:hidden;
+    }
+
+    .card{
+      width:min(900px,92vw);
+      padding:clamp(20px,4vw,44px);
+      border-radius:28px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.12);
+      box-shadow:0 20px 80px rgba(0,0,0,0.45);
+      text-align:center;
+      position:relative;
+      backdrop-filter:blur(10px);
+    }
+
+    h1{
+      margin:0 0 10px 0;
+      font-size:clamp(34px,5vw,64px);
+      line-height:1.05;
+      letter-spacing:-0.02em;
+      text-shadow:0 10px 30px rgba(0,0,0,0.35);
+    }
+
+    .sub{
+      margin:0 0 26px 0;
+      font-size:clamp(16px,2vw,20px);
+      opacity:0.9;
+    }
+
+    .btn-row{
+      display:flex;
+      justify-content:center;
+      align-items:center;
+      gap:18px;
+      flex-wrap:wrap;
+      margin-top:6px;
+    }
+
+    button{
+      border:0;
+      cursor:pointer;
+      font-weight:800;
+      border-radius:999px;
+      padding:16px 28px;
+      font-size:20px;
+      transition:transform 0.08s ease, filter 0.12s ease;
+      user-select:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    button:active{ transform:scale(0.98); }
+
+    #yesBtn{
+      padding:18px 42px;
+      font-size:24px;
+      background:linear-gradient(135deg,#ff4d7d,#ff1f5a);
+      color:#fff;
+      box-shadow:0 18px 50px rgba(255,31,90,0.35);
+    }
+    #yesBtn:hover{ filter:brightness(1.05); }
+
+    /* No button is fixed and teleported by JS */
+    #noBtn{
+      position:fixed;
+      left:20px;
+      top:20px;
+      transform:none;
+      background:rgba(255,255,255,0.16);
+      color:rgba(255,255,255,0.92);
+      padding:10px 16px;
+      font-size:14px;
+      border:1px solid rgba(255,255,255,0.18);
+      z-index:10;
+    }
+
+    .hint{
+      margin-top:22px;
+      font-size:14px;
+      opacity:0.75;
+    }
+
+    /* Popup */
+    .modal{
+      position:fixed;
+      inset:0;
+      display:none;
+      place-items:center;
+      background:rgba(0,0,0,0.55);
+      z-index:60;
+    }
+    .modal.show{ display:grid; }
+    .modal-card{
+      width:min(520px,92vw);
+      padding:26px 26px 22px;
+      border-radius:22px;
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.18);
+      backdrop-filter:blur(12px);
+      text-align:center;
+      box-shadow:0 30px 120px rgba(0,0,0,0.55);
+    }
+    .modal-card h2{
+      margin:0 0 10px 0;
+      font-size:34px;
+    }
+    .modal-card p{
+      margin:0 0 18px 0;
+      opacity:0.9;
+    }
+    .close{
+      background:rgba(255,255,255,0.18);
+      color:#fff;
+      padding:12px 18px;
+      font-size:16px;
+      border:1px solid rgba(255,255,255,0.2);
+      border-radius:999px;
+    }
+
+    /* Confetti canvas */
+    canvas#confetti{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index:50;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="confetti"></canvas>
+
+  <div class="card">
+    <h1><span id="name">Anusha</span>, will you be my Valentine? 💖</h1>
+    <p class="sub">Be honest… but the universe might have other plans 😄</p>
+
+    <div class="btn-row">
+      <button id="yesBtn">YES 💘</button>
+      <button id="noBtn">no</button>
+    </div>
+
+    <div class="hint">(Try pressing “no” if you dare.)</div>
+  </div>
+
+  <div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="modal-card">
+      <h2 id="mTitle">Ok! It’s a date!! 💞</h2>
+      <p>Now go tell Ajay what time 😌</p>
+      <button class="close" id="closeBtn">Awww ❤️</button>
+    </div>
+  </div>
+
+<script>
+  // Optional: set name via URL like ?name=Anusha
+  const params = new URLSearchParams(location.search);
+  const nm = params.get("name");
+  if (nm) document.getElementById("name").textContent = nm;
+
+  const noBtn = document.getElementById("noBtn");
+  const yesBtn = document.getElementById("yesBtn");
+  const modal = document.getElementById("modal");
+  const closeBtn = document.getElementById("closeBtn");
+
+  function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+  function safeBounds() {
+    const r = noBtn.getBoundingClientRect();
+    const pad = 12;
+    const maxX = window.innerWidth  - r.width  - pad;
+    const maxY = window.innerHeight - r.height - pad;
+    return { pad, maxX: Math.max(pad, maxX), maxY: Math.max(pad, maxY) };
+  }
+
+  function teleportNo(biasPoint = null) {
+    const r = noBtn.getBoundingClientRect();
+    const { pad, maxX, maxY } = safeBounds();
+
+    let x, y;
+
+    if (biasPoint && Number.isFinite(biasPoint.x) && Number.isFinite(biasPoint.y)) {
+      // Prefer opposite side of where the pointer is
+      const pointerOnRight = biasPoint.x > window.innerWidth / 2;
+      const pointerOnBottom = biasPoint.y > window.innerHeight / 2;
+
+      // Choose a region away from pointer
+      const minX = pointerOnRight ? pad : window.innerWidth * 0.55;
+      const maxXR = pointerOnRight ? window.innerWidth * 0.45 - r.width : window.innerWidth - r.width - pad;
+
+      const minY = pointerOnBottom ? pad : window.innerHeight * 0.55;
+      const maxYR = pointerOnBottom ? window.innerHeight * 0.45 - r.height : window.innerHeight - r.height - pad;
+
+      x = minX + Math.random() * Math.max(0, (maxXR - minX));
+      y = minY + Math.random() * Math.max(0, (maxYR - minY));
+
+      x = clamp(x, pad, maxX);
+      y = clamp(y, pad, maxY);
+    } else {
+      x = pad + Math.random() * (maxX - pad);
+      y = pad + Math.random() * (maxY - pad);
+    }
+
+    noBtn.style.left = `${x}px`;
+    noBtn.style.top  = `${y}px`;
+    noBtn.style.display = "inline-block";
+    noBtn.style.visibility = "visible";
+    noBtn.style.opacity = "1";
+    noBtn.style.pointerEvents = "auto";
+  }
+
+  function pointFromEvent(e) {
+    if (!e) return { x: window.innerWidth/2, y: window.innerHeight/2 };
+    if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) return { x: e.clientX, y: e.clientY };
+    return { x: window.innerWidth/2, y: window.innerHeight/2 };
+  }
+
+  // Start with a fun initial placement
+  teleportNo();
+
+  // Keep inside bounds on resize
+  window.addEventListener("resize", () => teleportNo());
+
+  // Evasive behavior
+  const evade = (e) => teleportNo(pointFromEvent(e));
+
+  // Desktop hover
+  noBtn.addEventListener("mouseenter", evade);
+
+  // Touch + pointer attempts
+  noBtn.addEventListener("pointerdown", (e) => { e.preventDefault(); evade(e); });
+  noBtn.addEventListener("touchstart", (e) => { e.preventDefault(); evade(e); }, { passive:false });
+
+  // Even if click happens, it slips away
+  noBtn.addEventListener("click", (e) => { e.preventDefault(); evade(e); });
+
+  // Keyboard focus
+  noBtn.addEventListener("focus", () => teleportNo({ x: window.innerWidth/2, y: window.innerHeight/2 }));
+
+  // If pointer comes near it (helps on desktop)
+  document.addEventListener("pointermove", (e) => {
+    const r = noBtn.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    const dist = Math.hypot(e.clientX - cx, e.clientY - cy);
+    if (dist < 90) teleportNo({ x: e.clientX, y: e.clientY });
+  });
+
+  // Keep it alive: teleport periodically (optional)
+  let wander = setInterval(() => teleportNo(), 900);
+
+  // YES button: popup + heart confetti
+  yesBtn.addEventListener("click", () => {
+    modal.classList.add("show");
+    startHeartsConfetti();
+    clearInterval(wander); // stop moving after "yes"
+  });
+
+  closeBtn.addEventListener("click", () => modal.classList.remove("show"));
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.classList.remove("show"); });
+
+  // --- Heart confetti (canvas) ---
+  const canvas = document.getElementById("confetti");
+  const ctx = canvas.getContext("2d");
+  let animId = null;
+
+  function resizeCanvas() {
+    const dpr = devicePixelRatio || 1;
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+
+  let hearts = [];
+  const heartColors = ["#ff4d7d","#ff1f5a","#ff7aa2","#ffd1dc","#ffffff"];
+
+  function makeHeartPath(x, y, size, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    ctx.scale(size, size);
+    ctx.beginPath();
+    ctx.moveTo(0, -0.3);
+    ctx.bezierCurveTo(0.45, -0.75, 1.1, -0.1, 0, 0.85);
+    ctx.bezierCurveTo(-1.1, -0.1, -0.45, -0.75, 0, -0.3);
+    ctx.closePath();
+    ctx.restore();
+  }
+
+  function spawnHearts(count = 190) {
+    hearts = [];
+    for (let i = 0; i < count; i++) {
+      hearts.push({
+        x: Math.random() * window.innerWidth,
+        y: -20 - Math.random() * window.innerHeight * 0.6,
+        vy: 2 + Math.random() * 4.5,
+        vx: (Math.random() - 0.5) * 1.2,
+        size: 8 + Math.random() * 10,
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.08,
+        color: heartColors[Math.floor(Math.random() * heartColors.length)],
+        alpha: 0.9 + Math.random() * 0.1
+      });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    for (const h of hearts) {
+      h.x += h.vx + Math.sin(h.y * 0.02) * 0.3;
+      h.y += h.vy;
+      h.rot += h.vr;
+
+      ctx.globalAlpha = h.alpha;
+      ctx.fillStyle = h.color;
+
+      makeHeartPath(h.x, h.y, h.size / 20, h.rot);
+      ctx.fill();
+
+      if (h.y > window.innerHeight + 40) {
+        h.y = -20 - Math.random() * 120;
+        h.x = Math.random() * window.innerWidth;
+      }
+    }
+    ctx.globalAlpha = 1;
+    animId = requestAnimationFrame(draw);
+  }
+
+  function startHeartsConfetti() {
+    spawnHearts(210);
+    if (animId) cancelAnimationFrame(animId);
+    draw();
+
+    // Stop after ~6.5 seconds
+    setTimeout(() => {
+      if (animId) cancelAnimationFrame(animId);
+      animId = null;
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+    }, 6500);
+  }
+</script>
+</body>
+</html>
